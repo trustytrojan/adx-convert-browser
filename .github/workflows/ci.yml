@@ -1,0 +1,56 @@
+name: Build
+on: [push]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+
+      - name: Install Dependencies
+        run: deno install
+
+      - name: Run 'expo prebuild'
+        run: deno -A npm:expo prebuild -p android
+
+      - name: Build Android Release
+        run: cd android && ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build
+          path: android/app/build/outputs/apk/release/*.apk
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+
+      - name: Install Dependencies
+        run: deno install
+
+      - name: Run 'expo prebuild'
+        run: denp -A npm:expo prebuild -p ios
+
+      - name: Install CocoaPods
+        run: cd ios && pod install
+
+      - name: Build iOS
+        run: cd ios && xcodebuild -workspace ios/*.xcworkspace -scheme your-app-name -configuration Release -sdk iphoneos
+
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath ios/build/App.xcarchive \
+            -exportPath ios/build/ipa \
+            -exportOptionsPlist ios/ExportOptions.plist
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-binary
+          # This glob finds the .ipa inside your export folder
+          path: ios/build/ipa/*.ipa
