@@ -1,0 +1,29 @@
+name: Build for Android
+on: [push]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 25.6.0
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run 'expo prebuild'
+        run: npx expo prebuild -p android
+
+      - name: Build Android Release
+        run: cd android && ./gradlew assembleRelease
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build
+          path: android/app/build/outputs/apk/release/*.apk
