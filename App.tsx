@@ -1,53 +1,93 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
+import { Text, View, TextInput, FlatList, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { File, Directory, Paths } from 'expo-file-system';
 import { getContentUriAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
+import songsData from './songs.json';
+import { ExportJob, fetchFolderName } from './gdrive-folder-download';
+import { styles } from './AppStyles';
 
-interface ResultItem {
-  id: string;
+interface SongItem {
+  folderId: string;
+  songId?: string;
   title: string;
+  artist?: string;
+  romanizedTitle?: string;
+  romanizedArtist?: string;
 }
 
 interface DownloadState {
   [key: string]: boolean;
 }
 
-const API_BASE_URL = 'https://api.trustytrojan.dev';
+interface DownloadJobItem {
+  folderId: string;
+  title: string;
+  artist?: string;
+  status: 'QUEUED' | 'IN_PROGRESS';
+  percentDone?: number;
+}
 
 export default function App() {
   const [searchText, setSearchText] = useState('');
-  const [results, setResults] = useState<ResultItem[]>([]);
+  const songs = songsData as SongItem[];
+  const [filteredSongs, setFilteredSongs] = useState<SongItem[]>(songs);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState<DownloadState>({});
+  const [downloadJobs, setDownloadJobs] = useState<DownloadJobItem[]>([]);
+  const [downloadedMap, setDownloadedMap] = useState<Record<string, boolean>>({});
   const searchTimeout = useRef<NodeJS.Timeout | null>(null);
+  const getFileForSong = (item: SongItem) => {
+    const sanitizedTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const fileName = `${sanitizedTitle}.adx`;
+    const downloadsDir = new Directory(Paths.document, 'adx-downloads');
+    downloadsDir.create({ intermediates: true, idempotent: true });
+    return new File(downloadsDir, fileName);
+  };
+  const viewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ item: SongItem }> }) => {
+    setDownloadedMap((prev) => {
+      let next = prev;
+      viewableItems.forEach(({ item }) => {
+        if (prev[item.folderId] !== undefined) return;
+        const file = getFileForSong(item);
+        if (file.exists) {
+          if (next === prev) next = { ...prev };
+          next[item.folderId] = true;
+        }
+      });
+      return next;
+    });
+  });
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
-  const performSearch = async (query: string) => {
-    if (!query.trim()) {
-      setResults([]);
+  const performSearch = (query: string) => {
+    const trimmed = query.trim().toLowerCase();
+    if (!trimmed) {
+      setFilteredSongs(songs);
       return;
     }
 
     setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/adx/search?q=${encodeURIComponent(query)}`);
-      const data: Record<string, string> = await response.json();
-      
-      // Convert the response to ResultItem array
-      const resultItems: ResultItem[] = Object.entries(data).map(([songName, folderId]) => ({
-        id: folderId,
-        title: songName,
-      }));
-      
-      setResults(resultItems);
-    } catch (error) {
-      console.error('Search error:', error);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
+    const terms = trimmed.split(/\s+/).filter(Boolean);
+    const filtered = songs.filter((song) => {
+      const haystack = [
+        song.title,
+        song.artist,
+        song.romanizedTitle,
+        song.romanizedArtist,
+        song.songId,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return terms.every((term) => haystack.includes(term));
+    });
+
+    setFilteredSongs(filtered);
+    setLoading(false);
   };
 
   const handleSearch = (text: string) => {
@@ -85,7 +125,6 @@ export default function App() {
     if (Platform.OS === 'android') {
       try {
         const contentUri = await getContentUriAsync(file.uri);
-        console.log(contentUri);
         await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
           data: contentUri,
           flags: 1,
@@ -128,47 +167,72 @@ export default function App() {
     }
   };
 
-  const handleResultPress = async (item: ResultItem) => {
-    setDownloading(prev => ({ ...prev, [item.id]: true }));
-    
+  const handleSongPress = async (item: SongItem) => {
+    setDownloading((prev) => ({ ...prev, [item.folderId]: true }));
+
     try {
-      const sanitizedTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      const fileName = `${sanitizedTitle}.adx`;
-      const downloadsDir = new Directory(Paths.document, 'adx-downloads');
-      downloadsDir.create({ intermediates: true, idempotent: true });
-      
-      const file = new File(downloadsDir, fileName);
-      
-      // Check if file already exists
+      const file = getFileForSong(item);
       if (file.exists) {
-        console.log('File already exists, opening:', file.uri);
+        setDownloadedMap((prev) => ({ ...prev, [item.folderId]: true }));
         await openWithAstroDX(file, item.title);
         return;
       }
 
-      // Download the file
-      console.log('Downloading:', item.title);
-      const downloadUrl = `${API_BASE_URL}/adx/download/${item.id}`;
-      
+      setDownloadJobs((prev) => {
+        const exists = prev.some((job) => job.folderId === item.folderId);
+        if (exists) return prev;
+        return [
+          ...prev,
+          {
+            folderId: item.folderId,
+            title: item.title,
+            artist: item.artist,
+            status: 'QUEUED',
+          },
+        ];
+      });
+
+      const folderName = await fetchFolderName(item.folderId);
+      const job = await ExportJob.create(item.folderId, folderName);
+      await job.waitForSuccess((status, percentDone) => {
+        setDownloadJobs((prev) =>
+          prev.map((entry) =>
+            entry.folderId === item.folderId
+              ? {
+                  ...entry,
+                  status: status === 'IN_PROGRESS' ? 'IN_PROGRESS' : 'QUEUED',
+                  percentDone,
+                }
+              : entry
+          )
+        );
+      });
+
+      if (!job.archives || job.archives.length === 0) {
+        throw new Error('No archives generated');
+      }
+
+      const downloadUrl = job.archives[0].storagePath;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000);
-      
+
       try {
         const response = await fetch(downloadUrl, { signal: controller.signal });
         clearTimeout(timeoutId);
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const arrayBuffer = await response.arrayBuffer();
         file.write(new Uint8Array(arrayBuffer));
-        
-        console.log('Download complete:', file.uri);
+        setDownloadedMap((prev) => ({ ...prev, [item.folderId]: true }));
         await openWithAstroDX(file, item.title);
       } catch (fetchError) {
         clearTimeout(timeoutId);
         throw fetchError;
+      } finally {
+        setDownloadJobs((prev) => prev.filter((entry) => entry.folderId !== item.folderId));
       }
     } catch (error) {
       console.error('Error:', error);
@@ -177,9 +241,9 @@ export default function App() {
         : 'An unknown error occurred';
       Alert.alert('Error', errorMessage);
     } finally {
-      setDownloading(prev => {
+      setDownloading((prev) => {
         const newState = { ...prev };
-        delete newState[item.id];
+        delete newState[item.folderId];
         return newState;
       });
     }
@@ -204,92 +268,67 @@ export default function App() {
         </View>
       )}
 
+      {downloadJobs.length > 0 && (
+        <>
+          <Text style={styles.sectionLabel}>Current Downloads</Text>
+          <View style={styles.downloadsContainer}>
+            <FlatList
+              style={styles.downloadsList}
+              data={downloadJobs}
+              keyExtractor={(item, index) => `${item.folderId}-${index}`}
+              renderItem={({ item }) => (
+                <View style={styles.resultButton}>
+                  <View style={styles.resultContent}>
+                    <View style={styles.resultTextGroup}>
+                      <Text style={styles.resultText}>{item.title}</Text>
+                      {!!item.artist && <Text style={styles.resultSubtext}>{item.artist}</Text>}
+                    </View>
+                    <ActivityIndicator size="small" color="#007AFF" style={styles.downloadIndicator} />
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        </>
+      )}
+
+      <Text style={styles.sectionLabel}>Song List</Text>
       <FlatList
-        style={styles.resultsList}
-        data={results}
-        keyExtractor={(item) => item.id}
+        style={styles.songsList}
+        data={filteredSongs}
+        keyExtractor={(item, index) => `${item.folderId}-${index}`}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[
               styles.resultButton,
-              downloading[item.id] && styles.resultButtonDisabled
+              downloading[item.folderId] && styles.resultButtonDisabled
             ]}
-            onPress={() => handleResultPress(item)}
-            disabled={downloading[item.id]}
+            onPress={() => handleSongPress(item)}
+            disabled={downloading[item.folderId]}
           >
             <View style={styles.resultContent}>
-              <Text style={styles.resultText}>{item.title}</Text>
-              {downloading[item.id] && (
+              <View style={styles.resultTextGroup}>
+                <Text style={styles.resultText}>{item.title}</Text>
+                {!!item.artist && <Text style={styles.resultSubtext}>{item.artist}</Text>}
+              </View>
+              {downloading[item.folderId] ? (
                 <ActivityIndicator size="small" color="#007AFF" style={styles.downloadIndicator} />
-              )}
+              ) : downloadedMap[item.folderId] ? (
+                <Text style={styles.downloadedCheck}>✓</Text>
+              ) : null}
             </View>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
           !loading && searchText ? (
-            <Text style={styles.emptyText}>No results found</Text>
+            <Text style={styles.emptyText}>No songs found</Text>
           ) : null
         }
+        onViewableItemsChanged={viewableItemsChanged.current}
+        viewabilityConfig={viewabilityConfig}
       />
 
       <StatusBar style="auto" />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    paddingTop: 40,
-  },
-  searchContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  searchBar: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  loadingContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  resultsList: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  resultButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 6,
-  },
-  resultButtonDisabled: {
-    opacity: 0.5,
-  },
-  resultContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  resultText: {
-    fontSize: 16,
-    color: '#333',
-    flex: 1,
-  },
-  downloadIndicator: {
-    marginLeft: 8,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-    fontSize: 16,
-    color: '#999',
-  },
-});
