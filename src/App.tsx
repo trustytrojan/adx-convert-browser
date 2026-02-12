@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, AppState } from 'react-native';
-import { useEffect, useRef } from 'react';
+import { View, ActivityIndicator, AppState, Text, Pressable, Linking, Modal } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
 import songsData from '../songs.json';
 import type { SongItem } from './types';
 import { SearchBar } from './components/SearchBar';
@@ -18,6 +18,8 @@ const rawSongs = songsData as SongItem[];
 const songs = Array.from(new Map(rawSongs.map(item => [item.folderId, item])).values());
 
 export default function App() {
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
   const {
     searchText,
     filteredSongs,
@@ -84,6 +86,25 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>AstroDX Convert Browser</Text>
+            <Pressable
+              onPress={() => Linking.openURL('https://github.com/trustytrojan/adx-convert-browser')}
+              style={styles.bylinePressable}
+              accessible
+              accessibilityRole="link"
+            >
+              <Text style={styles.headerByline}>by trustytrojan</Text>
+              <Text style={styles.headerIcon}>↗</Text>
+            </Pressable>
+          </View>
+          <Pressable onPress={() => setShowHelpModal(true)} style={styles.helpIconPressable}>
+            <Text style={styles.helpIcon}>?</Text>
+          </Pressable>
+        </View>
+      </View>
       <SearchBar
         value={searchText}
         onChangeText={handleSearch}
@@ -118,6 +139,34 @@ export default function App() {
           onCancel={exitSelectionMode}
         />
       )}
+
+      <Modal
+        visible={showHelpModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowHelpModal(false)}
+      >
+        <Pressable style={styles.helpModalOverlay} onPress={() => setShowHelpModal(false)}>
+          <View style={styles.helpModalContent}>
+            <Text style={styles.helpModalTitle}>Help</Text>
+            <Text style={styles.helpModalText}>
+              This is a helper application for downloading and importing ADX files to AstroDX.{'\n'}
+              Here's how to use the app:{'\n'}
+              - Filter by song title/artist with the search bar.{'\n'}
+              - Tap a song to start downloading it.{'\n'}
+              - You can add multiple songs to the download list. Once all songs in the list complete, they will all be imported into AstroDX at the same time!{'\n'}
+              - If a song has a <Text style={styles.downloadedCheck}>✓</Text>, it is already downloaded inside this app. Tap on it to immediately import to AstroDX.{'\n'}
+              - You can press and hold on a song to enter multi-select mode, which lets you perform the above actions on multiple songs.
+            </Text>
+            <Pressable
+              style={styles.helpModalCloseButton}
+              onPress={() => setShowHelpModal(false)}
+            >
+              <Text style={styles.helpModalCloseButtonText}>Close</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
 
       <StatusBar style="auto" />
     </View>

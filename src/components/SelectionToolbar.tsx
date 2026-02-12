@@ -26,7 +26,7 @@ export const SelectionToolbar = ({ selectedCount, onDownload, onCancel }: Select
           disabled={selectedCount === 0}
         >
           <Text style={styles.toolbarButtonText}>
-            Download/Open {selectedCount > 0 ? `(${selectedCount})` : ''}
+            Download/Import {selectedCount > 0 ? `(${selectedCount})` : ''}
           </Text>
         </TouchableOpacity>
       </View>

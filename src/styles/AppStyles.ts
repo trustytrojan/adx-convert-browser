@@ -4,11 +4,59 @@ export const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f1115',
+    paddingTop: 0,
+  },
+  header: {
     paddingTop: 40,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: '#0f1115',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  headerTitle: {
+    fontSize: 20,
+    color: '#e6e6e6',
+    fontWeight: '600',
+  },
+  headerByline: {
+    fontSize: 12,
+    color: '#9aa3b2',
+  },
+  bylinePressable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIcon: {
+    fontSize: 12,
+    color: '#9aa3b2',
+    marginLeft: 2,
+    fontWeight: 'bold'
+  },
+  helpIconPressable: {
+    width: 24,
+    height: 24,
+    borderRadius: 20,
+    backgroundColor: '#9aa3b2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  helpIcon: {
+    fontSize: 16,
+    color: '#0f1115',
+    fontWeight: '600',
   },
   searchContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    // paddingBottom: 16,
   },
   searchBar: {
     borderWidth: 1,
@@ -136,6 +184,43 @@ export const styles = StyleSheet.create({
     backgroundColor: '#666',
   },
   toolbarButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  helpModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  helpModalContent: {
+    backgroundColor: '#1b1f2a',
+    borderRadius: 12,
+    padding: 20,
+    marginHorizontal: 20,
+    maxWidth: 400,
+  },
+  helpModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#e6e6e6',
+    marginBottom: 12,
+  },
+  helpModalText: {
+    fontSize: 14,
+    color: '#9aa3b2',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  helpModalCloseButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  helpModalCloseButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
