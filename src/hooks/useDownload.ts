@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import type { SongItem, DownloadState, DownloadJobItem } from '../types';
 import { getFileForSong } from '../utils/fileSystem';
-import { openWithAstroDX } from '../utils/sharing';
+import { openWithAstroDX, openMultipleWithAstroDX } from '../utils/sharing';
 import { ExportJob, fetchFolderName } from '../services/gdrive';
 import {
   showDownloadProgressNotification,
@@ -132,22 +132,44 @@ export const useDownload = () => {
   };
 
   const handleBatchDownload = async (items: SongItem[]) => {
-    // Filter out already downloaded songs
-    const itemsToDownload = items.filter((item) => {
+    // Separate already downloaded and to be downloaded
+    const alreadyDownloaded: SongItem[] = [];
+    const itemsToDownload: SongItem[] = [];
+
+    items.forEach((item) => {
       const file = getFileForSong(item);
-      return !file.exists;
+      if (file.exists) {
+        alreadyDownloaded.push(item);
+      } else {
+        itemsToDownload.push(item);
+      }
     });
 
+    // If all items are already downloaded, send them via SEND_MULTIPLE
+    if (alreadyDownloaded.length > 0 && itemsToDownload.length === 0) {
+      const files = alreadyDownloaded.map(getFileForSong);
+      await openMultipleWithAstroDX(files);
+      return;
+    }
+
+    // If no items to download and none already downloaded (shouldn't happen)
     if (itemsToDownload.length === 0) {
       Alert.alert('Already Downloaded', 'All selected songs are already downloaded.');
       return;
     }
 
-    // Initialize counters
+    // Send already downloaded files via SEND_MULTIPLE (don't await - let it run in background)
+    if (alreadyDownloaded.length > 0) {
+      const files = alreadyDownloaded.map(getFileForSong);
+      openMultipleWithAstroDX(files).catch((error) => {
+        console.error('Error sending files to AstroDX:', error);
+      });
+    }
+
+    // Start downloads for items to be downloaded
     totalDownloadsRef.current = itemsToDownload.length;
     completedDownloadsRef.current = 0;
-
-	itemsToDownload.forEach(handleSongPress);
+    itemsToDownload.forEach(handleSongPress);
   };
 
   return {

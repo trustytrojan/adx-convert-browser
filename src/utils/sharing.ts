@@ -1,8 +1,9 @@
 import { Alert, Platform, AppState } from 'react-native';
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { getContentUriAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
+import { zip, unzip } from 'react-native-zip-archive';
 import { showDownloadCompleteNotification } from './notifications';
 
 // Track if an intent is currently active
@@ -75,6 +76,47 @@ export const openWithAstroDX = async (file: File, songTitle: string): Promise<vo
         { text: 'OK', style: 'cancel' }
       ]
     );
+  }
+};
+
+export const openMultipleWithAstroDX = async (files: File[]): Promise<void> => {
+  if (files.length === 0) return;
+
+  const appState = AppState.currentState;
+  const isAppInBackground = appState !== 'active';
+
+  // If app is in background or an intent is already active, don't proceed
+  if (isAppInBackground || isIntentActive) {
+    return;
+  }
+
+  try {
+    // Zip all ADX files into one combined ADX file
+    const filePaths = files.map(f => f.uri);
+
+    // remove the ".adx" extension, use these as the destination directory for unzipping each adx
+    const withoutExtensions: string[] = [];
+
+    for (const uri of filePaths) {
+      const withoutExt = uri.slice(0, uri.length - 4);
+      withoutExtensions.push(withoutExt);
+      await unzip(uri, withoutExt);
+    }
+
+    const outputPath = `${Paths.document.uri}combined-songs.adx`;
+    
+    // zip all the unzipped song folders into "combined-songs.adx"
+    await zip(withoutExtensions, outputPath);
+
+    const combinedSongsFile = new File(outputPath);
+      
+    // Create a File object for the zipped file and open it with AstroDX
+    await openWithAstroDX(combinedSongsFile, 'Combined Songs');
+
+    combinedSongsFile.delete();
+  } catch (error) {
+    console.error('Error combining files:', error);
+    Alert.alert('Error', 'Failed to combine files for sending to AstroDX');
   }
 };
 
