@@ -34,6 +34,7 @@ export default function App() {
     handleSongPress,
     handleBatchDownload,
     setDownloadedMap,
+    handleAppBecameActive,
   } = useDownload();
 
   const {
@@ -54,6 +55,7 @@ export default function App() {
       if (nextAppState === 'active') {
         // Reset intent lock when app comes to foreground
         resetIntentLock();
+        handleAppBecameActive();
       }
     });
 

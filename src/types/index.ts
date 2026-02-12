@@ -15,7 +15,7 @@ export interface DownloadJobItem {
   folderId: string;
   title: string;
   artist?: string;
-  status: 'QUEUED' | 'IN_PROGRESS';
+  status: 'QUEUED' | 'IN_PROGRESS' | 'COMPLETED';
   percentDone?: number;
 }
 

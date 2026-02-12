@@ -18,14 +18,16 @@ export const useDownload = () => {
   const totalDownloadsRef = useRef<number>(0);
   const completedDownloadsRef = useRef<number>(0);
   const batchCompletedFilesRef = useRef<Array<{ file: any; title: string }>>([]);
+  const shouldClearOnNextActiveRef = useRef<boolean>(false);
 
   // Update progress notification when download jobs change
   useEffect(() => {
     const updateProgressNotification = async () => {
-      if (downloadJobs.length > 0) {
+      const activeJobs = downloadJobs.filter((job) => job.status !== 'COMPLETED');
+      if (activeJobs.length > 0) {
         const completed = completedDownloadsRef.current;
         const total = totalDownloadsRef.current;
-        
+
         if (progressNotificationId.current) {
           const newId = await updateDownloadProgressNotification(
             progressNotificationId.current,
@@ -47,7 +49,7 @@ export const useDownload = () => {
     };
 
     updateProgressNotification();
-  }, [downloadJobs.length]);
+  }, [downloadJobs]);
 
   const handleSongPress = async (item: SongItem) => {
     const file = getFileForSong(item);
@@ -150,7 +152,13 @@ export const useDownload = () => {
         .then(() => {
           // Download complete, check if other downloads are still active
           completedDownloadsRef.current += 1;
-          setDownloadJobs((prev) => prev.filter((entry) => entry.folderId !== item.folderId));
+          setDownloadJobs((prev) =>
+            prev.map((entry) =>
+              entry.folderId === item.folderId
+                ? { ...entry, status: 'COMPLETED', percentDone: 100 }
+                : entry
+            )
+          );
 
           setDownloading((prev) => {
             const { [item.folderId]: _, ...remaining } = prev;
@@ -167,6 +175,9 @@ export const useDownload = () => {
               batchCompletedFilesRef.current = [];
               totalDownloadsRef.current = 0;
               completedDownloadsRef.current = 0;
+              if (files.length > 0) {
+                shouldClearOnNextActiveRef.current = true;
+              }
             }
 
             return remaining;
@@ -242,6 +253,17 @@ export const useDownload = () => {
     itemsToDownload.forEach(handleSongPress);
   };
 
+  const handleAppBecameActive = () => {
+    if (!shouldClearOnNextActiveRef.current) return;
+    const hasActiveJobs = downloadJobs.some((job) => job.status !== 'COMPLETED');
+    if (hasActiveJobs) return;
+
+    setDownloadJobs([]);
+    shouldClearOnNextActiveRef.current = false;
+    totalDownloadsRef.current = 0;
+    completedDownloadsRef.current = 0;
+  };
+
   return {
     downloading,
     downloadJobs,
@@ -249,5 +271,6 @@ export const useDownload = () => {
     handleSongPress,
     handleBatchDownload,
     setDownloadedMap,
+    handleAppBecameActive,
   };
 };

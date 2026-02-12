@@ -26,7 +26,11 @@ export const DownloadJobsList = ({ downloadJobs }: DownloadJobsListProps) => {
                   <Text style={styles.resultText}>{item.title}</Text>
                   {!!item.artist && <Text style={styles.resultSubtext}>{item.artist}</Text>}
                 </View>
-                <ActivityIndicator size="small" color="#007AFF" style={styles.downloadIndicator} />
+                {item.status === 'COMPLETED' ? (
+                  <Text style={styles.downloadedCheck}>✓</Text>
+                ) : (
+                  <ActivityIndicator size="small" color="#007AFF" style={styles.downloadIndicator} />
+                )}
               </View>
             </View>
           )}
