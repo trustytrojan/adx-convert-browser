@@ -17,6 +17,7 @@ export const useDownload = () => {
   const progressNotificationId = useRef<string | null>(null);
   const totalDownloadsRef = useRef<number>(0);
   const completedDownloadsRef = useRef<number>(0);
+  const batchCompletedFilesRef = useRef<Array<{ file: any; title: string }>>([]);
 
   // Update progress notification when download jobs change
   useEffect(() => {
@@ -49,14 +50,40 @@ export const useDownload = () => {
   }, [downloadJobs.length]);
 
   const handleSongPress = async (item: SongItem) => {
+    const file = getFileForSong(item);
+    
+    // If file already exists, accumulate it for batch opening
+    if (file.exists) {
+      setDownloadedMap((prev) => ({ ...prev, [item.folderId]: true }));
+      batchCompletedFilesRef.current.push({ file, title: item.title });
+      
+      // Check if other downloads are active
+      setDownloading((prev) => {
+        const hasOtherDownloads = Object.values(prev).some(d => d);
+        if (!hasOtherDownloads) {
+          // No other downloads, open accumulated files
+          const files = batchCompletedFilesRef.current.map(f => f.file);
+          if (files.length === 1) {
+            openWithAstroDX(files[0], batchCompletedFilesRef.current[0].title).catch(console.error);
+          } else if (files.length > 1) {
+            openMultipleWithAstroDX(files).catch(console.error);
+          }
+          batchCompletedFilesRef.current = [];
+        }
+        return prev;
+      });
+      return;
+    }
+
     setDownloading((prev) => ({ ...prev, [item.folderId]: true }));
 
     try {
-      const file = getFileForSong(item);
-      if (file.exists) {
-        setDownloadedMap((prev) => ({ ...prev, [item.folderId]: true }));
-        await openWithAstroDX(file, item.title);
-        return;
+      // Initialize batch refs if this is the first download
+      if (totalDownloadsRef.current === 0) {
+        totalDownloadsRef.current = 1;
+        completedDownloadsRef.current = 0;
+      } else {
+        totalDownloadsRef.current += 1;
       }
 
       setDownloadJobs((prev) => {
@@ -75,7 +102,9 @@ export const useDownload = () => {
 
       const folderName = await fetchFolderName(item.folderId);
       const job = await ExportJob.create(item.folderId, folderName);
-      await job.waitForSuccess((status, percentDone) => {
+      
+      // Don't await - let download progress in background and complete asynchronously
+      job.waitForSuccess((status, percentDone) => {
         setDownloadJobs((prev) =>
           prev.map((entry) =>
             entry.folderId === item.folderId
@@ -87,46 +116,86 @@ export const useDownload = () => {
               : entry
           )
         );
-      });
+      })
+        .then(() => {
+          // Job succeeded, now download the file
+          if (!job.archives || job.archives.length === 0) {
+            throw new Error('No archives generated');
+          }
 
-      if (!job.archives || job.archives.length === 0) {
-        throw new Error('No archives generated');
-      }
+          const downloadUrl = job.archives[0].storagePath;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-      const downloadUrl = job.archives[0].storagePath;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000);
+          return fetch(downloadUrl, { signal: controller.signal })
+            .then(async (response) => {
+              clearTimeout(timeoutId);
 
-      try {
-        const response = await fetch(downloadUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+              const arrayBuffer = await response.arrayBuffer();
+              file.write(new Uint8Array(arrayBuffer));
+              setDownloadedMap((prev) => ({ ...prev, [item.folderId]: true }));
 
-        const arrayBuffer = await response.arrayBuffer();
-        file.write(new Uint8Array(arrayBuffer));
-        setDownloadedMap((prev) => ({ ...prev, [item.folderId]: true }));
-        await openWithAstroDX(file, item.title);
-      } catch (fetchError) {
-        clearTimeout(timeoutId);
-        throw fetchError;
-      } finally {
-        setDownloadJobs((prev) => prev.filter((entry) => entry.folderId !== item.folderId));
-        completedDownloadsRef.current += 1;
-      }
+              // Accumulate file for batch opening
+              batchCompletedFilesRef.current.push({ file, title: item.title });
+            })
+            .catch((fetchError) => {
+              clearTimeout(timeoutId);
+              throw fetchError;
+            });
+        })
+        .then(() => {
+          // Download complete, check if other downloads are still active
+          completedDownloadsRef.current += 1;
+          setDownloadJobs((prev) => prev.filter((entry) => entry.folderId !== item.folderId));
+
+          setDownloading((prev) => {
+            const { [item.folderId]: _, ...remaining } = prev;
+            const hasOtherDownloads = Object.values(remaining).some(d => d);
+
+            if (!hasOtherDownloads) {
+              // All downloads complete - open all accumulated files
+              const files = batchCompletedFilesRef.current.map(f => f.file);
+              if (files.length === 1) {
+                openWithAstroDX(files[0], batchCompletedFilesRef.current[0].title).catch(console.error);
+              } else if (files.length > 1) {
+                openMultipleWithAstroDX(files).catch(console.error);
+              }
+              batchCompletedFilesRef.current = [];
+              totalDownloadsRef.current = 0;
+              completedDownloadsRef.current = 0;
+            }
+
+            return remaining;
+          });
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          completedDownloadsRef.current += 1;
+          const errorMessage = error instanceof Error 
+            ? (error.name === 'AbortError' ? 'Download timed out (90s limit)' : error.message)
+            : 'An unknown error occurred';
+          Alert.alert('Error', errorMessage);
+
+          setDownloadJobs((prev) => prev.filter((entry) => entry.folderId !== item.folderId));
+          setDownloading((prev) => {
+            const { [item.folderId]: _, ...remaining } = prev;
+            return remaining;
+          });
+        });
     } catch (error) {
       console.error('Error:', error);
       const errorMessage = error instanceof Error 
         ? (error.name === 'AbortError' ? 'Download timed out (90s limit)' : error.message)
         : 'An unknown error occurred';
       Alert.alert('Error', errorMessage);
-    } finally {
+
       setDownloading((prev) => {
-        const newState = { ...prev };
-        delete newState[item.folderId];
-        return newState;
+        const { [item.folderId]: _, ...remaining } = prev;
+        return remaining;
       });
     }
   };
@@ -169,6 +238,7 @@ export const useDownload = () => {
     // Start downloads for items to be downloaded
     totalDownloadsRef.current = itemsToDownload.length;
     completedDownloadsRef.current = 0;
+    batchCompletedFilesRef.current = [];
     itemsToDownload.forEach(handleSongPress);
   };
 
