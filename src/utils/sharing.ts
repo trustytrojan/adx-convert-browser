@@ -3,7 +3,6 @@ import { File, Paths } from 'expo-file-system';
 import { getContentUriAsync } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
-import { zip, unzip } from 'react-native-zip-archive';
 
 // Track if an intent is currently active
 let isIntentActive = false;
@@ -88,29 +87,54 @@ export const openMultipleWithAstroDX = async (files: File[]): Promise<void> => {
   }
 
   try {
-    // Zip all ADX files into one combined ADX file
-    const filePaths = files.map(f => f.uri);
+    const outputPath = `${Paths.document.uri}combined-songs.adx`;
+    const combinedSongsFile = new File(outputPath);
 
-    // remove the ".adx" extension, use these as the destination directory for unzipping each adx
-    const withoutExtensions: string[] = [];
+    if (Platform.OS === 'android') {
+      const { zip, unzip } = await import('react-native-zip-archive');
 
-    for (const uri of filePaths) {
-      const withoutExt = uri.slice(0, uri.length - 4);
-      withoutExtensions.push(withoutExt);
-      await unzip(uri, withoutExt);
+      // Zip all ADX files into one combined ADX file
+      const filePaths = files.map(f => f.uri);
+
+      // remove the ".adx" extension, use these as the destination directory for unzipping each adx
+      const withoutExtensions: string[] = [];
+
+      for (const uri of filePaths) {
+        const withoutExt = uri.slice(0, uri.length - 4);
+        withoutExtensions.push(withoutExt);
+        await unzip(uri, withoutExt);
+      }
+
+      // zip all the unzipped song folders into "combined-songs.adx"
+      await zip(withoutExtensions, outputPath);
+
+      // delete all the unzipped song folders
+      withoutExtensions.map(uri => new File(uri).delete());
+    } else if (Platform.OS === 'ios') {
+      const fflate = await import('fflate');
+
+      const decompressedSongFolders = Object.create(null);
+
+      for (const file of files) {
+        const bytes = file.bytesSync();
+        const songFiles = fflate.unzipSync(bytes);
+        console.log(Object.keys(songFiles));
+        const nameWithoutExt = file.name.slice(0, file.name.length - 4);
+        Object.assign(decompressedSongFolders, songFiles);
+        console.log(`Decompressed ${nameWithoutExt}`);
+      }
+
+      // Show loading message
+      Alert.alert('Please Wait', 'Compressing Songs for Bulk Import...', [], { cancelable: false });
+
+      const finalAdx = fflate.zipSync(decompressedSongFolders);
+      console.log(`Compressed final container ADX`);
+
+      combinedSongsFile.write(finalAdx);
     }
 
-    const outputPath = `${Paths.document.uri}combined-songs.adx`;
-    
-    // zip all the unzipped song folders into "combined-songs.adx"
-    await zip(withoutExtensions, outputPath);
-
-    const combinedSongsFile = new File(outputPath);
-      
     // Create a File object for the zipped file and open it with AstroDX
     await openWithAstroDX(combinedSongsFile, 'Combined Songs');
-
-    combinedSongsFile.delete();
   } catch (error) {
     console.error('Error combining files:', error);
     Alert.alert('Error', 'Failed to combine files for sending to AstroDX');
