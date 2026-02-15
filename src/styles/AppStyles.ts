@@ -14,37 +14,27 @@ export const styles = StyleSheet.create({
   },
   headerContent: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
   },
   headerTitle: {
     fontSize: 20,
     color: '#e6e6e6',
     fontWeight: '600',
   },
-  headerByline: {
-    fontSize: 12,
-    color: '#9aa3b2',
-  },
-  bylinePressable: {
+  headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  headerIcon: {
-    fontSize: 12,
-    color: '#9aa3b2',
-    marginLeft: 2,
-    fontWeight: 'bold'
+  githubButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  helpIconPressable: {
-    width: 24,
-    height: 24,
-    borderRadius: 20,
+  helpButton: {
+    width: 21,
+    height: 21,
+    borderRadius: 13,
     backgroundColor: '#9aa3b2',
     justifyContent: 'center',
     alignItems: 'center',
@@ -56,7 +46,6 @@ export const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 16,
-    // paddingBottom: 16,
   },
   searchBar: {
     borderWidth: 1,

@@ -12,6 +12,7 @@ import { useDownload } from './hooks/useDownload';
 import { useSelection } from './hooks/useSelection';
 import { resetIntentLock } from './utils/sharing';
 import { styles } from './styles/AppStyles';
+import GithubIcon from '../assets/github.svg';
 
 // Deduplicate songs by folderId (keep first occurrence)
 const rawSongs = songsData as SongItem[];
@@ -88,21 +89,23 @@ export default function App() {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.headerTitle}>AstroDX Convert Browser</Text>
+          <Text style={styles.headerTitle}>AstroDX Convert Browser</Text>
+          <View style={styles.headerRight}>
             <Pressable
-              onPress={() => Linking.openURL('https://github.com/trustytrojan/adx-convert-browser')}
-              style={styles.bylinePressable}
-              accessible
-              accessibilityRole="link"
+              onPress={() => { console.log('github icon pressed'); Linking.openURL('https://github.com/trustytrojan/adx-convert-browser') }}
+              style={styles.githubButton}
+              hitSlop={12}
             >
-              <Text style={styles.headerByline}>by trustytrojan</Text>
-              <Text style={styles.headerIcon}>↗</Text>
+              <GithubIcon width={24} height={24} fill="#9aa3b2" />
+            </Pressable>
+            <Pressable 
+              onPress={() => setShowHelpModal(true)} 
+              style={styles.helpButton}
+              hitSlop={12}
+            >
+              <Text style={styles.helpIcon}>?</Text>
             </Pressable>
           </View>
-          <Pressable onPress={() => setShowHelpModal(true)} style={styles.helpIconPressable}>
-            <Text style={styles.helpIcon}>?</Text>
-          </Pressable>
         </View>
       </View>
       <SearchBar
@@ -168,7 +171,7 @@ export default function App() {
         </Pressable>
       </Modal>
 
-      <StatusBar style="auto" />
+      <StatusBar style="inverted" />
     </View>
   );
 }
