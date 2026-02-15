@@ -5,6 +5,7 @@ export interface SongItem {
   artist: string;
   romanizedTitle?: string;
   romanizedArtist?: string;
+  communityNames?: string[];
 }
 
 export interface DownloadState {

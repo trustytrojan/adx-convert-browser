@@ -23,6 +23,7 @@ export const useSearch = (songs: SongItem[]) => {
         song.romanizedTitle,
         song.romanizedArtist,
         song.songId,
+        song.communityNames,
       ]
         .filter(Boolean)
         .join(' ')

@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, AppState, Text, Pressable, Linking, Modal } from 'react-native';
+import { View, ActivityIndicator, AppState, Text, Pressable, Linking, Modal, Platform } from 'react-native';
 import { useEffect, useRef, useState } from 'react';
 import type { SongItem } from './types';
 import { SearchBar } from './components/SearchBar';
@@ -216,7 +216,8 @@ export default function App() {
         </Pressable>
       </Modal>
 
-      <StatusBar style="inverted" />
+      {/* since we only support expo go on ios, and it needs 'inverted' to be visible */}
+      <StatusBar style={Platform.OS === 'ios' ? 'inverted' : 'auto'} />
     </View>
   );
 }
