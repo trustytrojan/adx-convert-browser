@@ -118,17 +118,17 @@ export const openMultipleWithAstroDX = async (files: File[]): Promise<void> => {
       for (const file of files) {
         const bytes = file.bytesSync();
         const songFiles = fflate.unzipSync(bytes);
-        console.log(Object.keys(songFiles));
-        const nameWithoutExt = file.name.slice(0, file.name.length - 4);
+        // console.log(Object.keys(songFiles));
+        // const nameWithoutExt = file.name.slice(0, file.name.length - 4);
         Object.assign(decompressedSongFolders, songFiles);
-        console.log(`Decompressed ${nameWithoutExt}`);
+        // console.log(`Decompressed ${nameWithoutExt}`);
       }
 
       // Show loading message
       Alert.alert('Please Wait', 'Compressing Songs for Bulk Import...', [], { cancelable: false });
 
       const finalAdx = fflate.zipSync(decompressedSongFolders);
-      console.log(`Compressed final container ADX`);
+      // console.log(`Compressed final container ADX`);
 
       combinedSongsFile.write(finalAdx);
     }

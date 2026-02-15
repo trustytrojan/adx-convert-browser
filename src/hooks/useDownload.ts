@@ -66,11 +66,14 @@ export const useDownload = () => {
         ];
       });
 
-      const folderName = await fetchFolderName(item.folderId);
-      const job = await ExportJob.create(item.folderId, folderName);
+      // const folderName = await fetchFolderName(item.folderId);
+      const job = await ExportJob.create(item.folderId, item.songId);
+
+      // console.log(`ExportJob started for folderId=${item.folderId} songId=${item.songId}`);
       
       // Don't await - let download progress in background and complete asynchronously
       job.waitForSuccess((status, percentDone) => {
+        // console.log(`ExportJob status=${status} for folderId=${item.folderId} songId='${item.songId}'`);
         setDownloadJobs((prev) =>
           prev.map((entry) =>
             entry.folderId === item.folderId
@@ -84,6 +87,8 @@ export const useDownload = () => {
         );
       })
         .then(() => {
+          // console.log(`ExportJob SUCCEEDED for folderId=${item.folderId} songId='${item.songId}'`);
+
           // Job succeeded, now download the file
           if (!job.archives || job.archives.length === 0) {
             throw new Error('No archives generated');
@@ -92,8 +97,10 @@ export const useDownload = () => {
           const downloadUrl = job.archives[0].storagePath;
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 90000);
+          // console.log(`Download started for folderId=${item.folderId} songId='${item.songId}'`);
 
           return File.downloadFileAsync(downloadUrl, file).then(() => {
+            // console.log(`Download finished for folderId=${item.folderId} songId='${item.songId}'`);
             clearTimeout(timeoutId);
             setDownloadedMap((prev) => ({ ...prev, [item.folderId]: true }));
 

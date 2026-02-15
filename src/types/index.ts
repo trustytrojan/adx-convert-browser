@@ -1,8 +1,8 @@
 export interface SongItem {
   folderId: string;
-  songId?: string;
+  songId: string;
   title: string;
-  artist?: string;
+  artist: string;
   romanizedTitle?: string;
   romanizedArtist?: string;
 }
